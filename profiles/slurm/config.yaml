@@ -1,0 +1,29 @@
+executor: slurm
+
+default-resources:
+  slurm_partition: "eddy"
+  slurm_account: "FILL_ME"
+  mem_mb: 0
+  mem_mb_per_cpu: 4000
+  cpus_per_task: 1
+  nodes: 1
+  runtime: 60
+
+set-resources:
+  download_genome:
+    runtime: 240
+    mem_mb_per_cpu: 2000
+  compress_genome:
+    runtime: 240
+    mem_mb_per_cpu: 8000
+  download_taxonomy:
+    runtime: 120
+    mem_mb_per_cpu: 2000
+
+resources:
+  - ncbi=2
+jobs: 20
+keep-incomplete: true
+printshellcmds: true
+latency-wait: 180
+max-status-checks-per-second: 1

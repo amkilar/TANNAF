@@ -1,0 +1,5 @@
+taxon: "Chlorophyta"
+taxid: null
+output_dir: "pipeline_download_naf_taxonomy/workflows/taxon_genomes/test/dry_run_output"
+ennaf: "/bin/cat"
+assembly_manifest: "pipeline_download_naf_taxonomy/workflows/taxon_genomes/test/assemblies.tsv"

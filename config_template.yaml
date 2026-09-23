@@ -1,0 +1,11 @@
+# Copy this file, choose a taxon, then set both paths before running.
+# taxid is optional and takes precedence over taxon when both are set.
+taxon: "Chlorophyta"
+taxid: null
+
+output_dir: "/absolute/path/to/reference_genome_run"
+ennaf: "/absolute/path/to/ennaf"
+
+# Optional: reuse a frozen NCBI dataformat TSV instead of querying assemblies.
+# Required columns are shown in test/assemblies.tsv.
+assembly_manifest: null
