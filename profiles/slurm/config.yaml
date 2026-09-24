@@ -10,8 +10,8 @@ default-resources:
   runtime: 60
 
 set-resources:
-  download_genome:
-    runtime: 240
+  download_genomes:
+    runtime: 1440
     mem_mb_per_cpu: 2000
   compress_genome:
     runtime: 240

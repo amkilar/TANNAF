@@ -4,7 +4,12 @@ taxon: "Chlorophyta"
 taxid: null
 
 output_dir: "/absolute/path/to/reference_genome_run"
-ennaf: "/absolute/path/to/ennaf"
+ennaf: "$HOME/software/naf/naf/ennaf/ennaf"
+
+# Download one package; switch to NCBI dehydration at this assembly count.
+# Set to 1 when the expected package may exceed 15 GB even with fewer genomes.
+dehydrated_threshold: 1000
+rehydrate_workers: 10
 
 # Optional: reuse a frozen NCBI dataformat TSV instead of querying assemblies.
 # Required columns are shown in test/assemblies.tsv.

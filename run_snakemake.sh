@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 unset SLURM_MEM_PER_NODE
+export CONDA_REPODATA_USE_SHARDS=false
+
+if [[ -n "${CONDA_PREFIX:-}" && -x "$CONDA_PREFIX/bin/conda" ]]; then
+    export CONDA_EXE="$CONDA_PREFIX/bin/conda"
+fi
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 CONFIG.yaml [snakemake arguments]" >&2

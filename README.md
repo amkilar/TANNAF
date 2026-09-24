@@ -2,7 +2,7 @@
 
 This Snakemake 9 workflow replaces the three older download, taxonomy, and compression pipelines without modifying them.
 
-It selects NCBI **reference genomes** below a configured taxonomic group with assembly levels `scaffold`, `chromosome`, or `complete`, downloads each genome, encodes it with `ennaf`, and joins the selected assemblies to the NCBI taxonomy table.
+It selects NCBI **reference genomes** below a configured taxonomic group with assembly levels `scaffold`, `chromosome`, or `complete`, downloads them as one data package, encodes each genome with `ennaf`, and joins the selected assemblies to the NCBI taxonomy table.
 
 ## Configure
 
@@ -11,7 +11,7 @@ cd pipeline_download_naf_taxonomy/workflows/taxon_genomes
 cp config_template.yaml config.yaml
 ```
 
-Set `taxon` to any NCBI taxonomic name, plus `output_dir` and the absolute path to `ennaf`. Alternatively, set `taxid` to a positive NCBI taxonomy ID; when supplied, it takes precedence over `taxon`:
+Set `taxon` to any NCBI taxonomic name and choose `output_dir`. The default `ennaf` setting matches the original cluster launcher, `$HOME/software/naf/naf/ennaf/ennaf`, and environment variables are expanded by the workflow. Alternatively, set `taxid` to a positive NCBI taxonomy ID; when supplied, it takes precedence over `taxon`:
 
 ```yaml
 taxon: null
@@ -20,6 +20,10 @@ taxid: 3055
 
 Before using SLURM, also replace `FILL_ME` in `profiles/slurm/config.yaml` with the cluster account and confirm the `eddy` partition.
 The launcher uses Snakemake's Conda integration; Snakemake 9.27 requires Conda 24.7.1 or newer.
+
+Downloads containing at least `dehydrated_threshold` assemblies automatically use NCBI's dehydrated package plus `datasets rehydrate`. The default threshold is 1,000 and rehydration uses 10 workers. Set the threshold to `1` if fewer assemblies may exceed NCBI's 15 GB regular-package guidance.
+
+**Dehydration** creates a small package containing genome metadata and links instead of the genome sequences themselves. **Rehydration** follows those links to download the actual FASTA files, using `rehydrate_workers` concurrent workers. This makes large downloads easier to resume and avoids building one enormous archive at NCBI.
 
 ## Check without running
 
@@ -42,10 +46,11 @@ bash run_snakemake.sh config.yaml
 ## Final outputs
 
 - `results/naf/<assembly_accession>.naf`
+- `results/fna/<assembly_accession>.fna`
 - `results/taxonomy/taxonomy.tsv`
 - `qc/taxon_genomes.pass`
 - `run_metadata.json`
 
 Set `assembly_manifest` to a previously generated `assemblies.tsv` to reproduce the exact accession set without repeating assembly discovery. The configured taxon or taxid is still used to retrieve its taxonomy table. NCBI genome packages contain one genomic FASTA per assembly plus an assembly data report; the taxonomy package supplies `taxonomy_summary.tsv`.
 
-Sources: [NCBI genome downloads](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/command-line/datasets/download/genome/), [genome package layout](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/data-packages/genome/), and [taxonomy metadata](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/taxonomy/taxonomy/).
+Sources: [NCBI genome downloads](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/command-line/datasets/download/genome/), [large downloads](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/large-download/), [genome package layout](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/data-packages/genome/), and [taxonomy metadata](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/taxonomy/taxonomy/).

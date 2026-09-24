@@ -9,8 +9,14 @@ RESULTSDIR = os.path.join(OUTDIR, "results")
 LOGDIR = os.path.join(OUTDIR, "logs")
 BENCHDIR = os.path.join(OUTDIR, "benchmarks")
 QCDIR = os.path.join(OUTDIR, "qc")
-ENNAF = config["ennaf"]
+ENNAF = os.path.expandvars(os.path.expanduser(config["ennaf"]))
 MANIFEST_OVERRIDE = config.get("assembly_manifest")
+DEHYDRATED_THRESHOLD = int(config.get("dehydrated_threshold", 1000))
+REHYDRATE_WORKERS = int(config.get("rehydrate_workers", 10))
+if DEHYDRATED_THRESHOLD < 1:
+    raise ValueError("dehydrated_threshold must be at least 1")
+if not 1 <= REHYDRATE_WORKERS <= 30:
+    raise ValueError("rehydrate_workers must be between 1 and 30")
 TAXON_NAME = str(config.get("taxon") or "").strip()
 TAXID = str(config.get("taxid") or "").strip()
 if TAXID:
@@ -24,6 +30,8 @@ else:
 
 ASSEMBLY_JSONL = os.path.join(RESULTSDIR, "metadata", "assemblies.jsonl")
 ASSEMBLY_TSV = os.path.join(RESULTSDIR, "metadata", "assemblies.tsv")
+ACCESSION_LIST = os.path.join(RESULTSDIR, "metadata", "accessions.txt")
+FNA_DIR = os.path.join(RESULTSDIR, "fna")
 TAXONOMY_ZIP = os.path.join(RESULTSDIR, "taxonomy", "taxonomy.zip")
 TAXONOMY_RAW = os.path.join(RESULTSDIR, "taxonomy", "taxonomy_summary.tsv")
 TAXONOMY_TABLE = os.path.join(RESULTSDIR, "taxonomy", "taxonomy.tsv")
@@ -53,6 +61,9 @@ if MANIFEST_OVERRIDE:
             os.path.join(RESULTSDIR, "naf", "{accession}.naf"),
             accession=ACCESSIONS,
         )
+
+    def fasta_input(wildcards):
+        return os.path.join(FNA_DIR, f"{wildcards.accession}.fna")
 else:
     def manifest_input(wildcards):
         return checkpoints.format_assembly_manifest.get(**wildcards).output.tsv
@@ -62,6 +73,10 @@ else:
             os.path.join(RESULTSDIR, "naf", "{accession}.naf"),
             accession=read_accessions(manifest_input(wildcards)),
         )
+
+    def fasta_input(wildcards):
+        directory = checkpoints.download_genomes.get().output.directory
+        return os.path.join(directory, f"{wildcards.accession}.fna")
 
 
 rule all:
@@ -117,57 +132,74 @@ if not MANIFEST_OVERRIDE:
             """
 
 
-rule download_genome:
-    """Download one NCBI genome data package."""
-    input:
-        manifest=manifest_input,
-    output:
-        package=temp(os.path.join(RESULTSDIR, "packages", "{accession}.zip")),
-    log:
-        os.path.join(LOGDIR, "download_genome_{accession}.log"),
-    benchmark:
-        os.path.join(BENCHDIR, "download_genome_{accession}.tsv")
-    conda:
-        NCBI_ENV
-    retries: 2
-    resources:
-        ncbi=1
-    shell:
-        """
-        datasets download genome accession {wildcards.accession:q} \
-            --include genome \
-            --filename {output.package:q} \
-            --no-progressbar > {log:q} 2>&1
-        test -s {output.package:q}
-        """
-
-
-rule extract_genome:
-    """Extract and normalize one genomic FASTA filename."""
-    input:
-        package=os.path.join(RESULTSDIR, "packages", "{accession}.zip"),
-    output:
-        fasta=temp(os.path.join(RESULTSDIR, "fna", "{accession}.fna")),
-    log:
-        os.path.join(LOGDIR, "extract_genome_{accession}.log"),
-    conda:
-        NCBI_ENV
-    retries: 1
-    params:
-        helper=HELPER,
-    shell:
-        """
-        python {params.helper:q} extract-genome \
-            --package {input.package:q} \
-            --accession {wildcards.accession:q} \
-            --output {output.fasta:q} > {log:q} 2>&1
-        """
+if MANIFEST_OVERRIDE:
+    rule download_genomes:
+        """Download all selected genomes in one NCBI data package."""
+        input:
+            manifest=manifest_input,
+        output:
+            accessions=ACCESSION_LIST,
+            fastas=expand(os.path.join(FNA_DIR, "{accession}.fna"), accession=ACCESSIONS),
+        log:
+            os.path.join(LOGDIR, "download_genomes.log"),
+        benchmark:
+            os.path.join(BENCHDIR, "download_genomes.tsv")
+        conda:
+            NCBI_ENV
+        retries: 2
+        resources:
+            ncbi=1
+        params:
+            helper=HELPER,
+            output_dir=lambda wildcards, output: os.path.dirname(output.fastas[0]),
+            threshold=DEHYDRATED_THRESHOLD,
+            workers=REHYDRATE_WORKERS,
+        shell:
+            """
+            python {params.helper:q} download-genomes \
+                --manifest {input.manifest:q} \
+                --accessions {output.accessions:q} \
+                --output-dir {params.output_dir:q} \
+                --dehydrated-threshold {params.threshold} \
+                --rehydrate-workers {params.workers} > {log:q} 2>&1
+            """
+else:
+    checkpoint download_genomes:
+        """Download all selected genomes, rehydrating large collections."""
+        input:
+            manifest=manifest_input,
+        output:
+            accessions=ACCESSION_LIST,
+            directory=directory(FNA_DIR),
+        log:
+            os.path.join(LOGDIR, "download_genomes.log"),
+        benchmark:
+            os.path.join(BENCHDIR, "download_genomes.tsv")
+        conda:
+            NCBI_ENV
+        retries: 2
+        resources:
+            ncbi=1
+        params:
+            helper=HELPER,
+            output_dir=lambda wildcards, output: output.directory,
+            threshold=DEHYDRATED_THRESHOLD,
+            workers=REHYDRATE_WORKERS,
+        shell:
+            """
+            python {params.helper:q} download-genomes \
+                --manifest {input.manifest:q} \
+                --accessions {output.accessions:q} \
+                --output-dir {params.output_dir:q} \
+                --dehydrated-threshold {params.threshold} \
+                --rehydrate-workers {params.workers} > {log:q} 2>&1
+            """
 
 
 rule compress_genome:
     """Encode one genomic FASTA in NAF format."""
     input:
-        fasta=os.path.join(RESULTSDIR, "fna", "{accession}.fna"),
+        fasta=fasta_input,
     output:
         naf=protected(os.path.join(RESULTSDIR, "naf", "{accession}.naf")),
     log:

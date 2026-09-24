@@ -4,7 +4,9 @@
 import argparse
 import csv
 import json
+import os
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
@@ -47,18 +49,71 @@ def require_columns(fieldnames, required, path):
         raise ValueError(f"{path} is missing columns: {', '.join(sorted(missing))}")
 
 
-def extract_genome(package, accession, output):
-    suffix = "_genomic.fna"
-    prefix = f"ncbi_dataset/data/{accession}/"
-    with ZipFile(package) as archive:
-        matches = [n for n in archive.namelist() if n.startswith(prefix) and n.endswith(suffix)]
-        if len(matches) != 1:
-            raise ValueError(f"Expected one genomic FASTA for {accession}, found {len(matches)}")
-        Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with archive.open(matches[0]) as source, open(output, "wb") as target:
-            shutil.copyfileobj(source, target)
-    if Path(output).stat().st_size == 0:
-        raise ValueError(f"Extracted an empty FASTA: {output}")
+def download_genomes(manifest, accessions_file, output_dir, threshold, workers):
+    if threshold < 1 or not 1 <= workers <= 30:
+        raise ValueError("Invalid dehydration threshold or rehydration worker count")
+    accessions = [row["Assembly Accession"] for row in rows(manifest)]
+    if not accessions or len(accessions) != len(set(accessions)):
+        raise ValueError(f"Assembly manifest is empty or contains duplicates: {manifest}")
+
+    accessions_file = Path(accessions_file)
+    output_dir = Path(output_dir)
+    accession_text = "".join(f"{accession}\n" for accession in accessions)
+    accessions_file.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    accessions_file.write_text(accession_text)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+
+    dehydrated = len(accessions) >= threshold
+    work = output_dir.parent / ".tannaf_download"
+    request = work / "accessions.txt"
+    if work.exists() and (not request.exists() or request.read_text() != accession_text):
+        shutil.rmtree(work)
+    work.mkdir(exist_ok=True)
+    request.write_text(accession_text)
+    package = work / "genomes.zip"
+    extracted = work / "package"
+    extracted_marker = work / ".extracted"
+    if not package.exists():
+        command = [
+            "datasets", "download", "genome", "accession",
+            "--inputfile", str(accessions_file),
+            "--include", "genome",
+            "--filename", str(package),
+            "--no-progressbar",
+        ]
+        if dehydrated:
+            command.append("--dehydrated")
+        subprocess.run(command, check=True)
+    if not extracted_marker.exists():
+        if extracted.exists():
+            shutil.rmtree(extracted)
+        with ZipFile(package) as archive:
+            archive.extractall(extracted)
+        extracted_marker.touch()
+    if dehydrated:
+        subprocess.run(
+            [
+                "datasets", "rehydrate",
+                "--directory", str(extracted),
+                "--max-workers", str(workers),
+                "--no-progressbar",
+            ],
+            check=True,
+        )
+
+    output_dir.mkdir()
+    for accession in accessions:
+        matches = list((extracted / "ncbi_dataset" / "data" / accession).glob("*_genomic.fna"))
+        if len(matches) != 1 or matches[0].stat().st_size == 0:
+            raise ValueError(f"Expected one non-empty genomic FASTA for {accession}")
+        target = output_dir / f"{accession}.fna"
+        try:
+            os.link(matches[0], target)
+        except OSError:
+            shutil.copyfile(matches[0], target)
+    shutil.rmtree(work)
 
 
 def extract_taxonomy(package, output):
@@ -147,10 +202,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    genome = subparsers.add_parser("extract-genome")
-    genome.add_argument("--package", required=True)
-    genome.add_argument("--accession", required=True)
-    genome.add_argument("--output", required=True)
+    genomes = subparsers.add_parser("download-genomes")
+    genomes.add_argument("--manifest", required=True)
+    genomes.add_argument("--accessions", required=True)
+    genomes.add_argument("--output-dir", required=True)
+    genomes.add_argument("--dehydrated-threshold", type=int, required=True)
+    genomes.add_argument("--rehydrate-workers", type=int, required=True)
 
     tax = subparsers.add_parser("extract-taxonomy")
     tax.add_argument("--package", required=True)
@@ -170,16 +227,22 @@ def main():
     metadata = subparsers.add_parser("write-metadata")
     metadata.add_argument("--manifest", required=True)
     metadata.add_argument("--ennaf", required=True)
-    metadata.add_argument("--taxon-name", default="")
-    metadata.add_argument("--taxid", default="")
+    metadata.add_argument("--taxon-name", nargs="?", default="")
+    metadata.add_argument("--taxid", nargs="?", default="")
     metadata.add_argument("--taxon-selector", required=True)
     metadata.add_argument("--config-file", required=True)
     metadata.add_argument("--output", required=True)
 
     args = parser.parse_args()
     log(f"=== {args.command} ===")
-    if args.command == "extract-genome":
-        extract_genome(args.package, args.accession, args.output)
+    if args.command == "download-genomes":
+        download_genomes(
+            args.manifest,
+            args.accessions,
+            args.output_dir,
+            args.dehydrated_threshold,
+            args.rehydrate_workers,
+        )
     elif args.command == "extract-taxonomy":
         extract_taxonomy(args.package, args.output)
     elif args.command == "build-taxonomy":
