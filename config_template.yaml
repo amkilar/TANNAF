@@ -1,10 +1,9 @@
-# Copy this file, choose a taxon, then set both paths before running.
+# Copy this file, choose a taxon, then set the output path before running.
 # taxid is optional and takes precedence over taxon when both are set.
 taxon: "Chlorophyta"
 taxid: null
 
-output_dir: "/absolute/path/to/reference_genome_run"
-ennaf: "$HOME/software/naf/naf/ennaf/ennaf"
+output_dir: "/Users/agata/Desktop/TANNAF/Genomes"
 
 # Download one package; switch to NCBI dehydration at this assembly count.
 # Set to 1 when the expected package may exceed 15 GB even with fewer genomes.

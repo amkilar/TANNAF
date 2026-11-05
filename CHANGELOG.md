@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05
+
+- Installed NAF 1.3.0 through the Snakemake Conda environment instead of requiring a configured `ennaf` path.
+
 ## 2026-09-24
 
 - Replaced per-assembly downloads with one batch package and automatic dehydration/rehydration for large collections.

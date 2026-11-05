@@ -9,7 +9,6 @@ RESULTSDIR = os.path.join(OUTDIR, "results")
 LOGDIR = os.path.join(OUTDIR, "logs")
 BENCHDIR = os.path.join(OUTDIR, "benchmarks")
 QCDIR = os.path.join(OUTDIR, "qc")
-ENNAF = os.path.expandvars(os.path.expanduser(config["ennaf"]))
 MANIFEST_OVERRIDE = config.get("assembly_manifest")
 DEHYDRATED_THRESHOLD = int(config.get("dehydrated_threshold", 1000))
 REHYDRATE_WORKERS = int(config.get("rehydrate_workers", 10))
@@ -210,11 +209,9 @@ rule compress_genome:
         NCBI_ENV
     retries: 1
     threads: 1
-    params:
-        ennaf=ENNAF,
     shell:
         """
-        {params.ennaf:q} {input.fasta:q} > {output.naf:q} 2> {log:q}
+        ennaf {input.fasta:q} > {output.naf:q} 2> {log:q}
         test -s {output.naf:q}
         """
 
@@ -326,7 +323,7 @@ rule write_run_metadata:
     retries: 0
     params:
         helper=HELPER,
-        ennaf=ENNAF,
+        ennaf="ennaf (Conda: naf=1.3.0)",
         taxon_name=TAXON_NAME,
         taxid=TAXID,
         taxon_selector=TAXON_SELECTOR,

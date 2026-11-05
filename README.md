@@ -11,7 +11,7 @@ cd pipeline_download_naf_taxonomy/workflows/taxon_genomes
 cp config_template.yaml config.yaml
 ```
 
-Set `taxon` to any NCBI taxonomic name and choose `output_dir`. The default `ennaf` setting matches the original cluster launcher, `$HOME/software/naf/naf/ennaf/ennaf`, and environment variables are expanded by the workflow. Alternatively, set `taxid` to a positive NCBI taxonomy ID; when supplied, it takes precedence over `taxon`:
+Set `taxon` to any NCBI taxonomic name and choose `output_dir`. Alternatively, set `taxid` to a positive NCBI taxonomy ID; when supplied, it takes precedence over `taxon`:
 
 ```yaml
 taxon: null
@@ -19,7 +19,7 @@ taxid: 3055
 ```
 
 Before using SLURM, also replace `FILL_ME` in `profiles/slurm/config.yaml` with the cluster account and confirm the `eddy` partition.
-The launcher uses Snakemake's Conda integration; Snakemake 9.27 requires Conda 24.7.1 or newer.
+The launcher uses Snakemake's Conda integration to install both NCBI Datasets and NAF (`ennaf`) automatically; Snakemake 9.27 requires Conda 24.7.1 or newer.
 
 Downloads containing at least `dehydrated_threshold` assemblies automatically use NCBI's dehydrated package plus `datasets rehydrate`. The default threshold is 1,000 and rehydration uses 10 workers. Set the threshold to `1` if fewer assemblies may exceed NCBI's 15 GB regular-package guidance.
 
@@ -34,7 +34,7 @@ snakemake --snakefile Snakefile --dry-run --configfile test/test_config.yaml --c
 snakemake --snakefile Snakefile --dag --configfile test/test_config.yaml | dot -Tpdf > test/dag.pdf
 ```
 
-The test configuration uses a frozen two-row manifest, so dry-run builds the complete DAG without contacting NCBI. `/bin/cat` is only a dry-run placeholder for `ennaf`; it must not be used for a real run.
+The test configuration uses a frozen two-row manifest, so dry-run builds the complete DAG without contacting NCBI.
 
 ## Run on the cluster later
 
