@@ -51,6 +51,7 @@ TAXONOMY_TABLE = os.path.join(RESULTSDIR, "taxonomy", "taxonomy.tsv")
 HELPER = os.path.join(workflow.basedir, "scripts", "helpers.py")
 PYTHON = sys.executable
 NCBI_ENV = os.path.join(workflow.basedir, "envs", "ncbi-datasets.yaml")
+NAF_ENV = os.path.join(workflow.basedir, "envs", "naf.yaml")
 
 
 def read_accessions(path):
@@ -240,7 +241,7 @@ rule compress_genome:
     benchmark:
         os.path.join(BENCHDIR, "compress_genome_{accession}.tsv")
     conda:
-        NCBI_ENV
+        NAF_ENV
     retries: 1
     threads: 1
     shell:

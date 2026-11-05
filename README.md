@@ -20,7 +20,7 @@ taxid: 3055
 
 Set `compress_genomes: false` to keep the downloaded FASTA files without creating NAF files. Taxonomy construction and output validation still run.
 
-The launcher uses Snakemake's Conda integration to install both NCBI Datasets and NAF (`ennaf`) automatically; Snakemake 9.27 requires Conda 24.7.1 or newer.
+The launcher uses Snakemake's Conda integration to install NCBI Datasets from `envs/ncbi-datasets.yaml` and NAF (`ennaf`) from `envs/naf.yaml`; Snakemake 9.27 requires Conda 24.7.1 or newer.
 
 Downloads containing at least `dehydrated_threshold` assemblies automatically use NCBI's dehydrated package plus `datasets rehydrate`. The default threshold is 1,000 and rehydration uses 10 workers. Set the threshold to `1` if fewer assemblies may exceed NCBI's 15 GB regular-package guidance.
 

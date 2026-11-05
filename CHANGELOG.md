@@ -6,6 +6,7 @@
 - Added a local execution profile and launcher alongside the existing SLURM setup.
 - Made NAF compression optional with the `compress_genomes` configuration setting.
 - Required and validated downloaded FASTA outputs even when NAF compression is disabled.
+- Split NAF into its own Snakemake Conda environment recipe.
 
 ## 2026-09-24
 

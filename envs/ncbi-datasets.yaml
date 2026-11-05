@@ -1,7 +1,5 @@
 channels:
   - conda-forge
-  - bioconda
 dependencies:
   - python=3.12
   - ncbi-datasets-cli=18.35.0
-  - naf=1.3.0
