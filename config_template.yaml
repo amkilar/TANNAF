@@ -1,9 +1,10 @@
 # Copy this file, choose a taxon, then set the output path before running.
 # taxid is optional and takes precedence over taxon when both are set.
-taxon: "Chlorophyta"
+taxon: "Escherichia coli"
 taxid: null
 
 output_dir: "/Users/agata/Desktop/TANNAF/Genomes"
+compress_genomes: false
 
 # Download one package; switch to NCBI dehydration at this assembly count.
 # Set to 1 when the expected package may exceed 15 GB even with fewer genomes.

@@ -18,7 +18,8 @@ taxon: null
 taxid: 3055
 ```
 
-Before using SLURM, also replace `FILL_ME` in `profiles/slurm/config.yaml` with the cluster account and confirm the `eddy` partition.
+Set `compress_genomes: false` to keep the downloaded FASTA files without creating NAF files. Taxonomy construction and output validation still run.
+
 The launcher uses Snakemake's Conda integration to install both NCBI Datasets and NAF (`ennaf`) automatically; Snakemake 9.27 requires Conda 24.7.1 or newer.
 
 Downloads containing at least `dehydrated_threshold` assemblies automatically use NCBI's dehydrated package plus `datasets rehydrate`. The default threshold is 1,000 and rehydration uses 10 workers. Set the threshold to `1` if fewer assemblies may exceed NCBI's 15 GB regular-package guidance.
@@ -34,9 +35,22 @@ snakemake --snakefile Snakefile --dry-run --configfile test/test_config.yaml --c
 snakemake --snakefile Snakefile --dag --configfile test/test_config.yaml | dot -Tpdf > test/dag.pdf
 ```
 
-The test configuration uses a frozen two-row manifest, so dry-run builds the complete DAG without contacting NCBI.
+The test configuration uses a frozen two-row manifest containing two small *Escherichia coli* reference genomes. A dry-run builds the complete DAG without contacting NCBI; running it normally performs a small end-to-end integration test. Paths in configuration files are resolved relative to the configuration file itself.
 
-## Run on the cluster later
+## Run locally
+
+The local profile uses all available CPU cores by default and runs at most two NCBI download jobs concurrently. Override the core count with any normal Snakemake argument:
+
+```bash
+bash run_local.sh config.yaml --dry-run
+bash run_local.sh config.yaml --cores 8
+```
+
+On Apple Silicon, the launcher creates Intel macOS rule environments because Bioconda does not publish NAF 1.3.0 for `osx-arm64`; Rosetta must be installed.
+
+## Run on SLURM
+
+Replace `FILL_ME` in `profiles/slurm/config.yaml` with the cluster account and confirm the `eddy` partition, then run:
 
 ```bash
 bash run_snakemake.sh config.yaml --dry-run

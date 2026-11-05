@@ -2,14 +2,28 @@
 
 import csv
 import os
+import sys
 
 
-OUTDIR = config["output_dir"]
+CONFIG_DIR = os.path.dirname(os.path.abspath(workflow.configfiles[0])) if workflow.configfiles else os.getcwd()
+
+
+def config_path(path):
+    path = os.path.expandvars(os.path.expanduser(path))
+    return path if os.path.isabs(path) else os.path.join(CONFIG_DIR, path)
+
+
+OUTDIR = config_path(config["output_dir"])
 RESULTSDIR = os.path.join(OUTDIR, "results")
 LOGDIR = os.path.join(OUTDIR, "logs")
 BENCHDIR = os.path.join(OUTDIR, "benchmarks")
 QCDIR = os.path.join(OUTDIR, "qc")
-MANIFEST_OVERRIDE = config.get("assembly_manifest")
+MANIFEST_OVERRIDE = config_path(config["assembly_manifest"]) if config.get("assembly_manifest") else None
+COMPRESS_GENOMES = config.get("compress_genomes", True)
+if isinstance(COMPRESS_GENOMES, str) and COMPRESS_GENOMES.lower() in ("true", "false"):
+    COMPRESS_GENOMES = COMPRESS_GENOMES.lower() == "true"
+if not isinstance(COMPRESS_GENOMES, bool):
+    raise ValueError("compress_genomes must be true or false")
 DEHYDRATED_THRESHOLD = int(config.get("dehydrated_threshold", 1000))
 REHYDRATE_WORKERS = int(config.get("rehydrate_workers", 10))
 if DEHYDRATED_THRESHOLD < 1:
@@ -35,6 +49,7 @@ TAXONOMY_ZIP = os.path.join(RESULTSDIR, "taxonomy", "taxonomy.zip")
 TAXONOMY_RAW = os.path.join(RESULTSDIR, "taxonomy", "taxonomy_summary.tsv")
 TAXONOMY_TABLE = os.path.join(RESULTSDIR, "taxonomy", "taxonomy.tsv")
 HELPER = os.path.join(workflow.basedir, "scripts", "helpers.py")
+PYTHON = sys.executable
 NCBI_ENV = os.path.join(workflow.basedir, "envs", "ncbi-datasets.yaml")
 
 
@@ -56,8 +71,16 @@ if MANIFEST_OVERRIDE:
         return MANIFEST_OVERRIDE
 
     def naf_targets(_wildcards):
+        if not COMPRESS_GENOMES:
+            return []
         return expand(
             os.path.join(RESULTSDIR, "naf", "{accession}.naf"),
+            accession=ACCESSIONS,
+        )
+
+    def fasta_targets(_wildcards):
+        return expand(
+            os.path.join(FNA_DIR, "{accession}.fna"),
             accession=ACCESSIONS,
         )
 
@@ -68,8 +91,17 @@ else:
         return checkpoints.format_assembly_manifest.get(**wildcards).output.tsv
 
     def naf_targets(wildcards):
+        if not COMPRESS_GENOMES:
+            return []
         return expand(
             os.path.join(RESULTSDIR, "naf", "{accession}.naf"),
+            accession=read_accessions(manifest_input(wildcards)),
+        )
+
+    def fasta_targets(wildcards):
+        directory = checkpoints.download_genomes.get().output.directory
+        return expand(
+            os.path.join(directory, "{accession}.fna"),
             accession=read_accessions(manifest_input(wildcards)),
         )
 
@@ -150,12 +182,13 @@ if MANIFEST_OVERRIDE:
             ncbi=1
         params:
             helper=HELPER,
+            python=PYTHON,
             output_dir=lambda wildcards, output: os.path.dirname(output.fastas[0]),
             threshold=DEHYDRATED_THRESHOLD,
             workers=REHYDRATE_WORKERS,
         shell:
             """
-            python {params.helper:q} download-genomes \
+            {params.python:q} {params.helper:q} download-genomes \
                 --manifest {input.manifest:q} \
                 --accessions {output.accessions:q} \
                 --output-dir {params.output_dir:q} \
@@ -181,12 +214,13 @@ else:
             ncbi=1
         params:
             helper=HELPER,
+            python=PYTHON,
             output_dir=lambda wildcards, output: output.directory,
             threshold=DEHYDRATED_THRESHOLD,
             workers=REHYDRATE_WORKERS,
         shell:
             """
-            python {params.helper:q} download-genomes \
+            {params.python:q} {params.helper:q} download-genomes \
                 --manifest {input.manifest:q} \
                 --accessions {output.accessions:q} \
                 --output-dir {params.output_dir:q} \
@@ -254,9 +288,10 @@ rule extract_taxonomy:
     retries: 1
     params:
         helper=HELPER,
+        python=PYTHON,
     shell:
         """
-        python {params.helper:q} extract-taxonomy \
+        {params.python:q} {params.helper:q} extract-taxonomy \
             --package {input.package:q} \
             --output {output.table:q} > {log:q} 2>&1
         """
@@ -276,9 +311,10 @@ rule build_taxonomy_table:
     retries: 0
     params:
         helper=HELPER,
+        python=PYTHON,
     shell:
         """
-        python {params.helper:q} build-taxonomy \
+        {params.python:q} {params.helper:q} build-taxonomy \
             --manifest {input.manifest:q} \
             --taxonomy {input.taxonomy:q} \
             --output {output.table:q} > {log:q} 2>&1
@@ -286,10 +322,11 @@ rule build_taxonomy_table:
 
 
 rule validate_outputs:
-    """Require one non-empty NAF and one taxonomy row per selected assembly."""
+    """Require one FASTA and taxonomy row per assembly, plus NAF when enabled."""
     input:
         manifest=manifest_input,
         taxonomy=TAXONOMY_TABLE,
+        fastas=fasta_targets,
         nafs=naf_targets,
     output:
         passed=os.path.join(QCDIR, "taxon_genomes.pass"),
@@ -300,12 +337,16 @@ rule validate_outputs:
     retries: 0
     params:
         helper=HELPER,
+        python=PYTHON,
+        skip_naf="" if COMPRESS_GENOMES else "--skip-naf",
     shell:
         """
-        python {params.helper:q} validate \
+        {params.python:q} {params.helper:q} validate \
             --manifest {input.manifest:q} \
             --taxonomy {input.taxonomy:q} \
+            --fastas {input.fastas:q} \
             --nafs {input.nafs:q} \
+            {params.skip_naf} \
             --output {output.passed:q} > {log:q} 2>&1
         """
 
@@ -323,18 +364,21 @@ rule write_run_metadata:
     retries: 0
     params:
         helper=HELPER,
+        python=PYTHON,
         ennaf="ennaf (Conda: naf=1.3.0)",
+        compress_genomes=str(COMPRESS_GENOMES).lower(),
         taxon_name=TAXON_NAME,
         taxid=TAXID,
         taxon_selector=TAXON_SELECTOR,
         config_file=workflow.configfiles[0] if workflow.configfiles else "unknown",
     shell:
         """
-        python {params.helper:q} write-metadata \
+        {params.python:q} {params.helper:q} write-metadata \
             --manifest {input.manifest:q} \
             --ennaf {params.ennaf:q} \
-            --taxon-name {params.taxon_name:q} \
-            --taxid {params.taxid:q} \
+            --compress-genomes {params.compress_genomes} \
+            --taxon-name={params.taxon_name:q} \
+            --taxid={params.taxid:q} \
             --taxon-selector {params.taxon_selector:q} \
             --config-file {params.config_file:q} \
             --output {output:q} > {log:q} 2>&1

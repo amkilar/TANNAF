@@ -1,6 +1,0 @@
-taxon: null
-taxid: 884214
-output_dir: "/Users/agata/Desktop/TANNAF/Genomes"
-dehydrated_threshold: 1000
-rehydrate_workers: 10
-assembly_manifest: "/Users/agata/Desktop/TANNAF/Genomes/assemblies.tsv"

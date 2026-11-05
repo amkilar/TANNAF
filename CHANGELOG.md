@@ -3,6 +3,9 @@
 ## 2026-11-05
 
 - Installed NAF 1.3.0 through the Snakemake Conda environment instead of requiring a configured `ennaf` path.
+- Added a local execution profile and launcher alongside the existing SLURM setup.
+- Made NAF compression optional with the `compress_genomes` configuration setting.
+- Required and validated downloaded FASTA outputs even when NAF compression is disabled.
 
 ## 2026-09-24
 

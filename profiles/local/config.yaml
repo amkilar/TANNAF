@@ -1,0 +1,10 @@
+executor: local
+cores: all
+
+resources:
+  - ncbi=2
+
+rerun-incomplete: true
+keep-incomplete: true
+printshellcmds: true
+latency-wait: 60

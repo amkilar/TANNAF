@@ -2,6 +2,7 @@
 set -euo pipefail
 unset SLURM_MEM_PER_NODE
 export CONDA_REPODATA_USE_SHARDS=false
+export CONDA_CHANNEL_PRIORITY=strict
 
 if [[ -n "${CONDA_PREFIX:-}" && -x "$CONDA_PREFIX/bin/conda" ]]; then
     export CONDA_EXE="$CONDA_PREFIX/bin/conda"

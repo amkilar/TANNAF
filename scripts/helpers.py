@@ -166,21 +166,25 @@ def build_taxonomy(manifest, taxonomy, output):
             writer.writerow(row)
 
 
-def validate(manifest, taxonomy, nafs, output):
+def validate(manifest, taxonomy, fastas, nafs, output, require_nafs=True):
     expected = {row["Assembly Accession"] for row in rows(manifest)}
     observed_taxonomy = {row["assembly_accession"] for row in rows(taxonomy)}
+    observed_fastas = {Path(path).stem for path in fastas}
+    empty_fastas = [path for path in fastas if not Path(path).is_file() or Path(path).stat().st_size == 0]
     observed_nafs = {Path(path).stem for path in nafs}
-    empty = [path for path in nafs if not Path(path).is_file() or Path(path).stat().st_size == 0]
-    if not expected or expected != observed_taxonomy or expected != observed_nafs or empty:
+    empty_nafs = [path for path in nafs if not Path(path).is_file() or Path(path).stat().st_size == 0]
+    invalid_nafs = require_nafs and (expected != observed_nafs or empty_nafs)
+    if not expected or expected != observed_taxonomy or expected != observed_fastas or empty_fastas or invalid_nafs:
         raise ValueError(
             f"Output validation failed: expected={sorted(expected)}, "
-            f"taxonomy={sorted(observed_taxonomy)}, naf={sorted(observed_nafs)}, empty={empty}"
+            f"taxonomy={sorted(observed_taxonomy)}, fasta={sorted(observed_fastas)}, "
+            f"naf={sorted(observed_nafs)}, empty_fasta={empty_fastas}, empty_naf={empty_nafs}"
         )
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(f"PASS\tassemblies={len(expected)}\n")
 
 
-def write_metadata(manifest, ennaf, taxon_name, taxid, taxon_selector, config_file, output):
+def write_metadata(manifest, ennaf, compress_genomes, taxon_name, taxid, taxon_selector, config_file, output):
     accessions = [row["Assembly Accession"] for row in rows(manifest)]
     metadata = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -192,6 +196,7 @@ def write_metadata(manifest, ennaf, taxon_name, taxid, taxon_selector, config_fi
         "assembly_manifest": str(Path(manifest).resolve()),
         "assembly_count": len(accessions),
         "ennaf": ennaf,
+        "compress_genomes": compress_genomes,
         "config_file": config_file,
     }
     Path(output).parent.mkdir(parents=True, exist_ok=True)
@@ -221,12 +226,15 @@ def main():
     check = subparsers.add_parser("validate")
     check.add_argument("--manifest", required=True)
     check.add_argument("--taxonomy", required=True)
-    check.add_argument("--nafs", nargs="+", required=True)
+    check.add_argument("--fastas", nargs="+", required=True)
+    check.add_argument("--nafs", nargs="*", default=[])
+    check.add_argument("--skip-naf", action="store_true")
     check.add_argument("--output", required=True)
 
     metadata = subparsers.add_parser("write-metadata")
     metadata.add_argument("--manifest", required=True)
     metadata.add_argument("--ennaf", required=True)
+    metadata.add_argument("--compress-genomes", choices=("true", "false"), required=True)
     metadata.add_argument("--taxon-name", nargs="?", default="")
     metadata.add_argument("--taxid", nargs="?", default="")
     metadata.add_argument("--taxon-selector", required=True)
@@ -248,11 +256,12 @@ def main():
     elif args.command == "build-taxonomy":
         build_taxonomy(args.manifest, args.taxonomy, args.output)
     elif args.command == "validate":
-        validate(args.manifest, args.taxonomy, args.nafs, args.output)
+        validate(args.manifest, args.taxonomy, args.fastas, args.nafs, args.output, not args.skip_naf)
     else:
         write_metadata(
             args.manifest,
             args.ennaf,
+            args.compress_genomes == "true",
             args.taxon_name,
             args.taxid,
             args.taxon_selector,
